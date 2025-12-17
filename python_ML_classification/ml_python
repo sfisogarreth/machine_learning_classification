@@ -1,1 +1,74 @@
-print("hello world")
+# --- STEP 1: GRABBING OUR TOOLS ---
+import torch  # The main engine that does all the heavy math (Tensors)
+import torchvision  # The library specifically for working with images
+from torchvision import datasets  # Let's us download famous collections of photos
+from torch import nn  # 'nn' stands for Neural Networks (the brain cells)
+from torch import optim  # 'optim' is the coach that fixes the brain's mistakes
+from torch.utils.data import DataLoader  # A tool to feed images to the brain in small bites (batches)
+from torchvision.transforms import ToTensor, Compose, Lambda  # Tools to clean and prep images
+
+# --- STEP 2: PREPPING THE IMAGES (THE TRANSFORMER) ---
+# We use 'Compose' to chain several cleaning steps together
+transform = Compose([
+    ToTensor(),  # Turn the picture into numbers between 0 and 1
+    # Lambda lets us write custom rules: divide by 255 to keep numbers small
+    Lambda(lambda image: image / 255), 
+    # View(784) stretches the 28x28 square image into one long line of 784 dots
+    Lambda(lambda image: image.view(784)) 
+])
+
+# --- STEP 3: DOWNLOADING THE DATASET ---
+# MNIST is the dataset of 60,000 handwritten numbers
+train_dataset = datasets.MNIST(root='./data', train=True, transform=transform, download=True)
+test_dataset = datasets.MNIST(root='./data', train=False, transform=transform, download=True)
+
+# --- STEP 4: BUILDING THE ARTIFICIAL BRAIN ---
+class MNISTModel(nn.Module):
+    def __init__(self):  # This 'sets up' the brain cells
+        super().__init__()
+        # nn.Sequential is a pipeline: data goes in one end and out the other
+        self.layers = nn.Sequential(
+            nn.Linear(784, 512), # Layer 1: Takes 784 dots, passes to 512 'neurons'
+            nn.ReLU(),           # ReLU is a filter: it keeps the important positive signals
+            nn.Linear(512, 512), # Layer 2: 512 neurons talk to another 512 neurons
+            nn.ReLU(),           # Another filter to help learn complex shapes
+            nn.Linear(512, 10)   # Final Layer: Outputs 10 numbers (one for each digit 0-9)
+        )
+        # The 'Answer Key' checker: calculates how far off the guess was
+        self.loss = nn.CrossEntropyLoss()
+        # The Coach (Adam): Adjusts the 'wires' in the brain to make it smarter
+        self.optimizer = optim.Adam(self.parameters(), lr=0.001)
+
+    # The Guessing Step: Passes image data through the layers
+    def forward(self, X):
+        return self.layers(X)
+
+    # The Studying Step: Checks the error and fixes the brain
+    def fit(self, X, y):
+        self.optimizer.zero_grad()  # Wipe the chalkboard clean for a new lesson
+        y_pred = self.forward(X)    # Brain makes a guess (Prediction)
+        loss_val = self.loss(y_pred, y) # Compare guess to the real answer (calculate Loss)
+        loss_val.backward()         # Work backward to see which neurons made the mistake
+        self.optimizer.step()       # Coach tweaks the brain cells based on the mistakes
+        return loss_val.item()      # Return the error number so we can track it
+
+# --- STEP 5: PREPARING THE LESSONS ---
+mnist_model = MNISTModel() # Create an instance of our brain
+BATCH_SIZE = 16 # We will show the student 16 cards at a time
+
+# DataLoaders handle the shuffling and batching for us
+dataloader_train = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
+dataloader_test = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
+
+# --- STEP 6: THE TRAINING LOOP (STUDY TIME) ---
+EPOCHS = 5 # How many times the student reads the WHOLE book of 60,000 cards
+for i in range(EPOCHS):
+    total_loss = 0
+    # For every batch (set of 16 images) in the dataset...
+    for xs, ys in dataloader_train:
+        # Train the model and add the error to our total
+        total_loss += mnist_model.fit(xs, ys)
+    
+    # Calculate the average error for this Epoch
+    total_loss /= len(dataloader_train)
+    print(f"EPOCH {i}: Average Error (Loss) = {total_loss:.4f}")
